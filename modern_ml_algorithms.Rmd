@@ -1,0 +1,42 @@
+---
+title: "modern ML algorithms overview"
+---
+
+website: https://elitedatascience.com/machine-learning-algorithms
+
+1. Regression (model and predict continuous variables)
+
+linear regression (3 additional types: LASSO, Ridge, and Elastic-Net)
+
+regression tree (decision tree/ensembles) learn in a hierarchical fashion by repeatedly splitting your dataset into separate branches that maximize the information gain of each split. This branching structure allows regression trees to naturally learn non-linear relationships. (additional types: RF and gradient boosted trees GBM;  but in practice, RF's often perform very well out-of-the-box while GBM's are harder to tune but tend to have higher performance ceilings)
+
+Deep Learning (neural nets, can't do)
+
+Nearest Neighbors: make predictions for new obs based on similar training obs (memory intensive, perform poorly for lots of data) (regularized regression or tree ensembles are almost always better use of time)
+
+2. CLassification (predict categorical variables, ex: employee churn, email spam, financial fraud)
+
+logistic regression (regularized); classification counter to linear regression
+
+classificaiton trees (ensembles): classicifaction counterparts to regression trees (called decision trees or classification and regression trees (CART))
+
+Deep Learning (noooope...image classification)
+
+Support Vector Machines (use kernals to calculate the distance between two observations; The SVM algorithm then finds a decision boundary that maximizes the distance between the closest members of separate classes.)
+
+Naive Bayes (very simple algorithm based around conditional probability and counting. Essentially, your model is actually a probability table that gets updated through your training data. To predict a new observation, you'd simply "look up" the class probabilities in your "probability table" based on its feature values.)
+
+3. Clustering (unsupervised to find natural groupings of observations, like customer segmentation, social network analysis; it is unsupervised so data visualization evaluates results. if there is a right answer (pre-labled clusters are in the training set...then classificaiton algorithms are more appropriate))
+
+K-means!
+
+others: Affinity propagation? Hierarchical clustering? DBSCAN
+
+
+K nearest neighbors
+
+decision trees
+
+random forest
+
+naive bayes

@@ -1,0 +1,83 @@
+---
+title: "Apple Topics"
+---
+
+Apple applied research topics to know: with expertise in pattern mining, anomaly detection, predictive modeling, classification and optimization
+
+1. pattern mining
+  Data mining functionality can be broken down into 4 main "problems," namely: classification and regression (together: predictive analysis); cluster analysis; frequent pattern mining; and outlier analysis.
+  Classification is one of the main methods of supervised learning, and the manner in which prediction is carried out as relates to data with class labels. Classification involves finding a model which describes data classes, which can then be used to classify instances of unknown data. The concept of training data versus testing data is of integral importance to classification.
+
+Popular classification algorithms for model building, and manners of presenting classifier models, include (but are not limited to):
+
+Decision Trees
+Support Vector Machines
+Neural Networks
+Nearest Neighbors
+
+Examples of classification abound. A sample of such opportunities include:
+
+Identifying credit risks at multiple levels (low, medium, high)
+Loan approvals (binary classification: loan versus no loan)
+Classifying news stories based on multiple topics (politics, sports, business, entertainment, ..., etc.)
+To classify news stories, for example, labeled stories can be used to build a model, while stories of unknown classes are then used to test the model, with the model predicting what the story's topic is based on its training. Classification is one of the main drivers of data mining, and its potential applications are, quite literally, endless.
+
+Regression is similar to classification, in that it is another dominant form of supervised learning and is useful for predictive analysis. They differ in that classification is used for predictions of data with distinct finite classes, while regression is used for predicting continuous numeric data. As a form of supervised learning, training/testing data is an important concept in regression as well. Linear regression is a common form of regression "mining."
+
+What is regression useful for? Like classification, the potential is limitless. A few particular examples include:
+
+Predicting home prices, as houses tend to be priced on the financial continuum, as opposed to being categorical
+Trend estimation, in the fitting of trend lines to time series data
+Multivariate estimation of health related indicators, such as life expectancy
+As a beginner, don't let non-linear regression fool you: it's simply that the best-fit line isn't linear, and it, instead, takes another shape. This can be referred to as curve-fitting, but it is essentially no different than linear regression and fitting straight lines, though the methods used for estimation will be different.
+
+Clustering:
+Clustering is used for analyzing data which does not include pre-labeled classes. Data instances are grouped together using the concept of maximizing intraclass similarity and minimizing the similarity between differing classes. This translates to the clustering algorithm identifying and grouping instances which are very similar, as opposed to ungrouped instances which are much less-similar to one another. As clustering does not require the pre-labeling of classes, it is a form of unsupervised learning.
+
+k-means Clustering is perhaps the most well-known example of a clustering algorithm, but is not the only one. Different clustering schemes exist, including hierarchical clustering, fuzzy clustering, and density clustering, as do different takes on centroid-style clustering (the family to which k-means belongs).
+
+Returning to document examples, clustering analysis would allow for a set of documents of unknown authors to be clustered together based on their content style, and (hopefully), as a result, their authors - or, at least, by similar authors. In marketing, clustering can be of particular use in identifying distinct groups of customer bases, allowing for targeting based on what techniques may be known to have worked with other similar customers in said groups.
+
+Other examples? Think of any situation in which you may have a large dataset of instances which are not explicitly separated categorically, but which may "naturally" exhibit similar sets of characteristics: a collection of data describing types of animals (# of legs, eye position, covering); extensive data about numerous types of proteins; genetic info describing individuals of a wide array of ethnic backgrounds. All of these situations (and many more) could benefit from allowing unsupervised clustering algorithms find which instances are similar to one another, and which instances are dissimilar.
+
+Frequent Pattern Mining
+
+Frequent pattern mining is a concept that has been used for a very long time to describe an aspect of data mining that many would argue is the very essence of the term data mining: taking a set of data and applying statistical methods to find interesting and previously-unknown patterns within said set of data. We aren't looking to classify instances or perform instance clustering; we simply want to learn patterns of subsets which emerge within a dataset and across instances, which ones emerge frequently, which items are associated, and which items correlate with others. It's easy to see why the above terms become conflated.
+
+Frequent pattern mining is most closely identified with market basket analysis, which is the identification of subsets of finite superset of products that are purchased together with some level of both absolute and correlative frequency. This concept can be generalized beyond the purchase of items; however, the underlying principle of item subsets remains unchanged.
+
+Outlier Analysis
+
+Outlier analysis, also called anomaly detection, is a bit different than the other data mining "problems," and is often not considered on its own, for a few specific reasons.
+
+First, and most importantly to this discussion, outlier analysis is not its own method of mining as are the other problems above, but instead can actually use the above methods for its own goals (it's an end, as opposed to a means). Second, outlier analysis can also be approached as an exercise in descriptive statistics, which some would argue is not data mining at all (holding that data mining consists of, by definition, predictive statistical methods). However, in the interests of being exhaustive, it has been included here.
+
+Outliers are data instances which do not seem to readily fit the behavior of the remaining data or a resulting model. Though many data mining algorithms intentionally do not take outliers into account, or can be modified to explicitly discard them, there are times when outliers themselves are where the money is.
+
+And that could not be more literal than in fraud detection, which uses outliers as identification of fraudulent activity. Regularly use your credit card in and around New York and on online, mostly for insignificant purchases? Used it at a coffee shop this AM in Soho, had dinner on the Upper West Side, but spent several thousand dollars "in person" on electronics equipment in Paris sometime in between? There's your outlier, and these are pursued relentlessly using a wide variety of mining and simple descriptive techniques.
+
+
+2. anomaly detection
+
+Anomaly detection (or outlier detection) is the identification of rare items, events or observations which raise suspicions by differing significantly from the majority of the data. Typically, anomalous data can be connected to some kind of problem or rare event such as e.g. bank fraud, medical problems, structural defects, malfunctioning equipment etc. This connection makes it very interesting to be able to pick out which data points can be considered anomalies, as identifying these events are typically very interesting from a business perspective.
+
+This brings us to one of the key objectives: How do we identify whether data points are normal or anomalous? In some simple cases, as in the example figure below, data visualization can give us important information. In this case of two-dimensional data (X and Y), it becomes quite easy to visually identify anomalies through data points located outside the typical distribution. However, looking at the figures to the right, it is not possible to identify the outlier directly from investigating one variable at the time: It is the combination of the X and Y variable that allows us to easily identify the anomaly. This complicates the matter substantially when we scale up from two variables to 10–100s of variables, which is often the case in practical applications of anomaly detection. 
+
+article continued in bookmarked article...
+
+3. predictive modeling
+
+https://towardsdatascience.com/selecting-the-correct-predictive-modeling-technique-ba459c370d59
+
+There are many different types of predictive modeling techniques including ANOVA, linear regression (ordinary least squares), logistic regression, ridge regression, time series, decision trees, neural networks, and many more.
+
+linear regression; multiple regression; ridge regression; cross validation: https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236
+
+4. classification
+
+https://analyticsindiamag.com/7-types-classification-algorithms/
+types: logistic regression (binary predictor, assumes all predictors are independent, and assumes no missing values); naive bayes is good on small amounts of data, but is a poor estimator; stochastic gradient descent?; k_nearest neighbors is simple to implement, robust to noisy trianing data and effective with large data sets, but is computationally expensive; decision tree: given a set of data the decision tree procudes rules that can be used to classify data. it is simple to understand and visualize, requires little data preparation, can handle numeric and categorical data, but it can create unnecessarily complex trees that are too relient on noise in the data and can't be applied generally. random forest fits a number of decision trees on various subsamples of data sets and averages to improve predicitive acuracy and control for over fitting, tends to be more accurate than decision trees, but is slow in real time and complex. To compare the different types of classification models, use accuracy, % of true positives/true negatives, and the F1 score
+
+https://blog.statsbot.co/machine-learning-algorithms-183cc73197c
+
+5. optimization

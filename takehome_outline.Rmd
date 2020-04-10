@@ -1,0 +1,111 @@
+---
+title: "Take Home Outline"
+---
+
+This is the layout for a takehome technical challenge. Fill in/update with relevant information.
+
+```{r}
+#load libraries
+pacman::p_load(Hmisc, caret, randomForest, forecast, tidyverse, lubridate)
+#rethinking, zoo, drake,
+```
+
+```{r}
+#load data
+#data("USArrests")
+#dat <- read.csv(file.choose())
+
+```
+
+```{r}
+#eda
+head(USArrests)
+html(describe(USArrests))
+#Proper exploratory analysis is about answering questions. It's about extracting enough insights from your dataset to course correct before you get lost in the weeds.
+#helps to...get hints for data cleaning, get ideas for feature engineering, get a feel for the data set for insights, but be QUICK, EFFICINET, and DECISIVE
+#first look at...
+#How many observations do I have?
+#How many features?
+#What are the data types of my features? Are they numeric? Categorical?
+#Do I have a target variable?
+#Do the columns make sense?
+#Do the values in those columns make sense?
+#Are the values on the right scale?
+#Is missing data going to be a big problem based on a quick eyeball test?
+
+#plot (numeric) features with histograms, and look for the following:
+#Distributions that are unexpected
+#Potential outliers that don't make sense
+#Features that should be binary (i.e. "wannabe indicator variables")
+#Boundaries that don't make sense
+#Potential measurement errors
+
+#plot categorical features with bar charts: In particular, you'll want to look out for sparse classes, which are classes that have a very small number of observations.
+#They tend to be problematic when building models.
+#In the best case, they don't influence the model much.
+#In the worse case, they can cause the model to be overfit.
+#Therefore, we recommend making a note to combine or reassign some of these classes later. We prefer saving this until Feature Engineering (Lesson 4).
+
+#Segmentations are powerful ways to observe the relationship between categorical features and numeric features.
+#Box plots allow you to do so.
+#Here are a few insights you could draw from the following chart.
+#The median transaction price (middle vertical bar in the box) for Single-Family homes was much higher than that for Apartments / Condos / Townhomes.
+#The min and max transaction prices are comparable between the two classes.
+#In fact, the round-number min ($200k) and max ($800k) suggest possible data truncation...
+#...which is very important to remember when assessing the generalizability of your models later!
+
+#correlations
+#correlations allow you to look at the relationships between numeric features and other numeric features.
+#Correlation is a value between -1 and 1 that represents how closely two features move in unison. You don't need to remember the math to calculate them. Just know the following intuition:
+
+#Positive correlation means that as one feature increases, the other increases. E.g. a child’s age and her height.
+#Negative correlation means that as one feature increases, the other decreases. E.g. hours spent studying and number of parties attended.
+#Correlations near -1 or 1 indicate a strong relationship.
+#Those closer to 0 indicate a weak relationship.
+#0 indicates no relationship.
+#Correlation heatmaps help you visualize this information. 
+#In general, you should look out for:
+#Which features are strongly correlated with the target variable?
+#Are there interesting or unexpected strong correlations between other features?
+#Again, your aim is to gain intuition about the data, which will help you throughout the rest of the workflow.
+```
+
+```{r}
+#Data Cleaning
+#-remove duplicate records (mostly happens in collection ie table joins, scrape data, data from other departments)
+#-remove irrelevant observations (obs that don't fit the problem you're trying to solve; ex: building a model for single family homes, so remove obs with apartments, look at distributions of categorical charts from EDA and remove those that shouldn't be there)
+#-fix structural errors (those with typos, inconsistent capitalization (categorical, typically; look at the bar plots of categorical variables), mislabled cases (IT and information technology should be combined; N/A and NA are the same, etc.))
+#-filter out unwanted outliers (linear regression are less robust to outliers than decision tree models; if you have a legitimate reason to remove an outlier, it will help model's performance, but outliers are innocent until proven guilty. Don't remove just because it's a big number. need a reson like: suspicious measurements that are unlikely to be real data)
+#- handle missing data (two common methods are dropping obs (not great because you loose information) and imputing the missing value based on other obs(also lose information this way, and just reinforce the other obs likelihood); instead: flag for missingness if categorical call, 'missing' and if numeric flag with an indicator variable that tells youit was missing then fill the value with 0). this method allows the algorithm to estimate the optimal constant for missingness, instead of just filling it in with the mean
+```
+
+```{r}
+#Feature Engineering
+#create new model inputs based on current variables available; it allows you to isolate and highlight key information, which helps algorithms focus on what's important; you can bring in domain expertise; you can bring in other's domain expertise
+#create intercation features (a combination of 2+ features), can be products, sums or differences between two features. look at them and ask, "could I combine this informaiton in any way that might be more useful?"
+#ex. have the number of schools near the property and the school rating, but what might be more important is having more school options that are good (multiply!)
+#combine spares classes; until each one has about 50/at least 50 observations; having a lot of sparse classes can cause overfitting
+  #combine by grouping similar classes or grouping 'other' class
+#add dummy variables (most ML alogrithms can't handle categorical/text values, so create dummy variables for categorical features)
+#remove unused features: ID columns, Features that wouldn't be available at the time of prediction, Other text descriptions
+```
+
+```{r}
+#create training and testing data sets
+```
+
+```{r}
+#model selection
+```
+
+```{r}
+#alternative modeling building/ideas
+```
+
+```{r}
+#visualizations
+```
+
+```{r}
+#results
+```

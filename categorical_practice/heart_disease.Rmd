@@ -1,0 +1,664 @@
+---
+title: "R Notebook"
+---
+
+#Strategy:
+1. load libraries
+2. load data
+3. EDA
+4. Cleaning
+5. Feature Engineering
+6. Training/Testing Sets
+7. Model selection and building iteration
+8. Model Comparison
+9. Visualizations
+10. Results/Next Steps
+
+#1. load libraries
+```{r}
+#load libraries
+pacman::p_load(funModeling, dataMaid, Hmisc, corrplot, minerva, caret, tidyverse)
+```
+
+#2. load data
+The data set is from the funModeling package. The target variable is 'has_heart_disease' (0=bad consumer, 1=good consumer)
+```{r}
+data(heart_disease)
+```
+
+
+#3. EDA
+First, let's look at the summary statistics and histograms of all the variables.
+```{r}
+html(describe(heart_disease))
+#Alternative quick looks at the whole data set
+#glimpse(heart_disease)
+#summary(heart_disease)
+```
+The target variable is binary (has_heart_disease); we have 303 observations across 16 columns.
+* Age is well distributed across the sample, near normal looking
+* gender is binary
+* chest_pain looks like a ranking from 1-4 on severity. Although they are buckets, we'll treat it as a numeric variable because it is ordered.
+* resting blood pressure (numeric) has an interesting distribution. It may have outliers and may best be treated with binning of the values.
+* serum cholesterol looks to have an outlier or a few that may need to be examined more closely. Otherwise the distribution looks fairly normal.
+* fasting blood sugar is a binary response. Perhaps it is representitve of some cutoff for a reasonable tolerance or amount.
+* Resting electro is 3 discrete categories; unknown if they have an order to them; unknown if should be treated as categorical or numeric. Will treat as numeric for now.
+* max heart rate has a fairly normal distribution with potentially outliers on both ends that will need to be examined.
+* exer angina is a binary response
+* oldpeak--unsure what this variable represents. It looks like a very skewed distribution with a long right hand tail. We  many find that binning this variable results in better handling.
+* slope: unsure what this variable means. there are 3 distinct categories, but not sure if they are ordered are not. the default is treating them as numeric, so we will continue as such. the first 2 values are well represented and the third is not.
+*num vessels flour: have no idea what this variable means, but there are 4 missing values. It does appear to only have 4 responses. unsure if they are ordered responses, but since they are being treated as numeric we will treat them as such.
+* thal is missing only 2 values. the categories assigned are 3, 6, and 7. We will treat this one as categorical because there are no inbetween values that show order. But perhaps this is a mistake and it should be treated numerically.
+* heart disease severity is ordered. It is redundant with our target, 'has heart disease' as 0 is no heart disease and 1-4 is some expresion of heart disease. We will probably drop this variable, but will check in our EDA if we should keep it.
+*exter angina: categorical response. unknown what exter angina is, but probably associated with exer angina.
+*has heart disease: binary target, no missing values. 0=no hd 1=has hd
+
+
+df_status is an easy way to look for missing values and correct varibale type assignment.
+```{r}
+df_status(heart_disease) 
+```
+fasting_blood_sugar has a high probability of a 0 value, so it may skew the results or not be a helpful predictor. We'll keep this in mind in our data exploration.
+num_vessels_flour and thal are the only two variables with missing data (total of 6 records). Becasue there are so few, we might be okay in deleting these records, but let's remember to examine them.
+
+```{r}
+heart_disease %>%
+  filter(is.na(num_vessels_flour) | is.na(thal))
+```
+
+
+
+
+This shows the the plot and table for the factor variables
+```{r}
+freq(heart_disease)
+```
+Chest pain should be treated as a numeric value because it has order in the values. The others are okay as factors. There are few 1's for chest pain, few 1's for fasting blood sugar, few 1's for resting electro, and few 6 for thal. We should keep these small values in mind as we fit our models and the important values are chosen. The values may result in over fitting.
+
+
+Information for continuous variables
+```{r}
+profiling_num(heart_disease)
+```
+
+plots for continuous variables:
+age, resting_blood_pressure, serum_cholestoral, max_heart_rate, exer_angina, oldpeak, slope, num_vessels_flour, heart_disease_severity
+```{r}
+heart_disease %>%
+  select(age) %>%
+  ggplot(aes(x=age)) +
+  geom_histogram(binwidth = 3) +
+  theme_minimal()
+
+heart_disease %>%
+  select(resting_blood_pressure) %>%
+  ggplot(aes(x=resting_blood_pressure)) +
+  geom_histogram() +
+  theme_minimal()
+
+heart_disease %>%
+  select(serum_cholestoral) %>%
+  ggplot(aes(x=serum_cholestoral)) +
+  geom_histogram() +
+  theme_minimal()
+
+heart_disease %>%
+  select(max_heart_rate) %>%
+  ggplot(aes(x=max_heart_rate)) +
+  geom_histogram() +
+  theme_minimal()
+
+heart_disease %>%
+  select(exer_angina) %>%
+  ggplot(aes(x=exer_angina)) +
+  geom_histogram() +
+  theme_minimal()
+
+heart_disease %>%
+  select(oldpeak) %>%
+  ggplot(aes(x=oldpeak)) +
+  geom_histogram() +
+  theme_minimal()
+
+heart_disease %>%
+  select(slope) %>%
+  ggplot(aes(x=slope)) +
+  geom_histogram() +
+  theme_minimal()
+
+heart_disease %>%
+  select(num_vessels_flour) %>%
+  ggplot(aes(x=num_vessels_flour)) +
+  geom_histogram() +
+  theme_minimal()
+
+heart_disease %>%
+  select(heart_disease_severity) %>%
+  ggplot(aes(x=heart_disease_severity)) +
+  geom_histogram() +
+  theme_minimal()
+```
+
+With the continuous variables, we're looking for NA values, outliers, odd distributions, variables that should be categorical, etc. Oldpeak is the only one that looks like it may have outliers/need to be treated differently if it's an important variable.
+
+
+heart_disease %>%
+  mutate(chest_pain = as.numeric(chest_pain),
+         exer_angina = as.factor(exer_angina)) %>%
+  select(-heart_disease_severity)
+
+#EDA Continued: Looking at the Relationship between the target variable and the features we have
+Correct the data type assignements and remove redundant columns
+```{r}
+heart_disease_all <- heart_disease %>%
+  mutate(chest_pain = as.numeric(chest_pain),
+         exer_angina = as.factor(exer_angina)) %>%
+  select(-heart_disease_severity)
+```
+
+
+
+
+#Caret Feature Plot
+```{r}
+# pair-wise plots of all 4 attributes, dots colored by class
+featurePlot(x=heart_disease[,1:5], y=heart_disease[,16], plot="pairs", auto.key=list(columns=6))
+featurePlot(x=heart_disease[,6:15], y=heart_disease[,16], plot="pairs", auto.key=list(columns=5))
+```
+
+
+#Caret Density Plots
+```{r}
+# density plots for each attribute by class value
+featurePlot(x=heart_disease[,1:15], y=heart_disease[,16], plot="density", scales=list(x=list(relation="free"), y=list(relation="free")), auto.key=list(columns=6))
+```
+
+
+
+#Categorical Variables
+gender, fasting_blood_sugar, resting_electro, exer_angina, thal, exter_angina, target=has_heart_disease
+
+```{r}
+#blue is no, red is yes
+cross_plot(data=heart_disease_all, input=c("gender", "fasting_blood_sugar", "resting_electro", "exer_angina", "thal", "exter_angina"), target="has_heart_disease", plot_type='percentual')
+#gender: many nore men get heart disease (at least a higher percentage of men) compared to women. This looks like an important varibale in predicting if a patient will ahve heart disease
+#fasting_blood_sugar: there does not appear to be much of a difference in this group between having heart disease and not having heart disease. We will probably be able to drop it, unless it interacts with another variable.
+#resting_electro: there does appear to be a large difference between the three groups in their instance of getting heart disease.
+#exer_angina: there appears to be a large differences in the instances of heart disease for this group.
+#thal: group 3 is very differenct from 6 and 7, but 6 and 7 aren't quite as different. note the NA's
+#exter_angina: significant difference.
+```
+
+
+Here, we need to make a decision about the NA values. How are we going to deal with them? What do they make sense as in this data set? Can we easily replace them with other methods? It looks like we probably just want to drop them as they can't be easily replaced and we won't loose much information without them.
+
+
+
+
+#Continuous Variables (boxplots): 
+age, chest_pain, resting_blood_pressure, serum_cholestoral, max_heart_rate, oldpeak, slope, num_vessels_flour
+As a general rule, a variable will rank as more important if boxplots are not aligned horizontally.
+Statistical tests: percentiles are another used feature used by them in order to determine -for example- if means across groups are or not the same.
+
+```{r}
+plotar(data=heart_disease_all, input=c("age", "chest_pain", "resting_blood_pressure", "serum_cholestoral", "max_heart_rate", "oldpeak", "slope", "num_vessels_flour"), target="has_heart_disease", plot_type = "boxplot")
+#oldpeak looks useful; max_heart_rate looks useful; serum_cholesterol is very close; resting_blood pressure is very close; age looks good.
+#age, chest_pain, max_heart_rate, old_peak, and num_vessels_flour all look like they have a potential to be important variables: there is a visually significant difference between the means and spread of the variables. One thing we should keep in mind though, is that it does look like we may have outliers that would impact regression models (but would be okay in random forest or gbm's because they are more robust models)
+```
+
+
+
+#Correlation and Relationships
+```{r}
+correlation_table(data=heart_disease_all, target="has_heart_disease") #retrieves R metric for all numeric variables skipping the categorical/nominal ones. Squaring this number returns the R-squared statistic (aka R2), which goes from 0 no correlation to 1 high correlation. the R statistic is highly influenced by outliers and non-linear relationships.
+```
+
+
+
+Look for correlation between the numeric features. We want to remove any varibales that are highly correlated with each other.
+```{r}
+#Check for correlation between numeric values
+heart_disease_numeric <- heart_disease_2 %>%
+  select(age, chest_pain, resting_blood_pressure, serum_cholestoral, max_heart_rate, oldpeak, slope, num_vessels_flour)
+
+# calculate correlation matrix between numeric values. Remove one of a piar that is highly correlated as to remove duplicates
+correlationMatrix <- cor(heart_disease_numeric)
+# summarize the correlation matrix
+print(correlationMatrix)
+# find attributes that are highly corrected (ideally >0.75)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.7)
+# print indexes of highly correlated attributes
+print(highlyCorrelated)
+
+#we are okay in that the numeric attributes are not correlated to each other. Yay!
+```
+
+Look for issues in correlation between the categorical features. We'll use MIC as our measure.
+```{r}
+#library(minerva)
+#We need to do a data preparation trick, converting every categorical variable into flag (or dummy variable).
+# selecting just a few variables
+heart_disease_2 = 
+  select(heart_disease, slope, num_vessels_flour, thal, heart_disease_severity, exter_angina, exer_angina, resting_electro, fasting_blood_sugar, chest_pain, gender, has_heart_disease)
+
+# this conversion from categorical to a numeric is merely 
+# to have a cleaner plot
+heart_disease_2$has_heart_disease=
+  ifelse(heart_disease_2$has_heart_disease=="yes", 1, 0)
+
+# it converts all categorical variables (factor and 
+# character for R) into numerical variables.
+# skipping the original so the data is ready to use
+dmy = dummyVars(" ~ .", data = heart_disease_2)
+
+heart_disease_3 = data.frame(predict(dmy, newdata = heart_disease_2))
+
+# Important: If you recieve this message 
+# `Error: Missing values present in input variable 'x'. 
+# Consider using use = 'pairwise.complete.obs'.` 
+# is because data has missing values.
+# Please don't omit NA without an impact analysis first, 
+# in this case it is not important. 
+heart_disease_4=na.omit(heart_disease_3)
+  
+# compute the mic!
+mine_res_hd=mine(heart_disease_4)
+#mine_res_hd
+```
+
+```{r}
+#library(corrplot) 
+diag(mine_res_hd$MIC)=0
+
+# Correlation plot with circles. 
+corrplot(mine_res_hd$MIC, 
+         method="circle",
+         # only display upper diagonal
+         type="lower", 
+         #label color, size and rotation
+         tl.col="red",
+         tl.cex = 0.9, 
+         tl.srt=90, 
+         # dont print diagonal (var against itself)
+         diag=FALSE, 
+         # accept a any matrix, mic in this case 
+         #(not a correlation element)
+         is.corr = F 
+        
+)
+```
+
+It looks like the only varibales with issues are within themselves (ie the flag's within thal are correlated, which is okay)
+The below plot just adds the values to it., that's fine.
+
+```{r}
+# Correlation plot with color and correlation MIC
+corrplot(mine_res_hd$MIC, 
+         method="color",
+         type="lower", 
+         number.cex=0.7,
+         # Add coefficient of correlation
+         addCoef.col = "black", 
+         tl.col="red", 
+         tl.srt=90, 
+         tl.cex = 0.9,
+         diag=FALSE, 
+         is.corr = F 
+)
+```
+They are useful only when the number of variables are not big. Or if you perform a variable selection first, keeping in mind that every variable should be numerical.
+
+If there is some categorical variable in the selection you can convert it into numerical first and inspect the relationship between the variables, thus sneak peak how certain values in categorical variables are more related to certain outcomes, like in this case.
+
+Further than correlation, MIC or other information metric measure if there is a functional relationship.
+
+A high MIC value indicates that the relationship between the two variables can be explained by a function. Is our job to find that function or predictive model.
+
+#Variable Importance with MIC
+```{r}
+# Getting the index of the variable to 
+# predict: has_heart_disease
+target="has_heart_disease"
+index_target=grep(target, colnames(heart_disease_4))
+
+# master takes the index column number to calculate all
+# the correlations
+mic_predictive=mine(heart_disease_4, 
+                    master = index_target)$MIC
+
+# creating the data frame containing the results, 
+# ordering descently by its correlation and excluding
+# the correlation of target vs itself
+df_predictive = 
+  data.frame(variable=rownames(mic_predictive), 
+                         mic=mic_predictive[,1], 
+                         stringsAsFactors = F) %>% 
+  arrange(-mic) %>% 
+  filter(variable!=target)
+
+# creating a colorful plot showing importance variable
+# based on MIC measure
+ggplot(df_predictive, 
+       aes(x=reorder(variable, mic),y=mic, fill=variable)
+       ) + 
+  geom_bar(stat='identity') + 
+  coord_flip() + 
+  theme_bw() + 
+  xlab("") + 
+  ylab("Variable Importance (based on MIC)") + 
+  guides(fill=FALSE)
+```
+
+
+
+Need a decision--can we drop these variables without making a large impact? They only make up 6 records of the whole data set, so it is within reason to remove them. Alternative methods would be creating flags for the missing data and filling in or imputing the varibales with a few different methods (ex missForest). We would typically make this decision at the end of this section/EDA.
+```{r}
+heart_disease_clean <- na.omit(heart_disease)
+```
+
+Correcting variable types and removing duplicate column
+```{r}
+heart_disease_all <- na.omit(heart_disease) %>%
+  mutate(chest_pain = as.numeric(chest_pain),
+         exer_angina = as.factor(exer_angina)) %>%
+  select(-heart_disease_severity)
+```
+
+Our data frame with the correct variable names and dropped na values is called heart_disease_all
+
+
+#Train/Test
+Create Training and Testing Sets with an 80% split.
+```{r}
+set.seed(123)
+training.samples <- heart_disease_all$has_heart_disease %>% 
+  createDataPartition(p = 0.75, list = FALSE) #from caret package; stratified random sample w/in response variable, ie it keeps the balance
+train.data  <- heart_disease_all[training.samples, ]
+test.data <- heart_disease_all[-training.samples, ]
+```
+Notes: no missing values in the response to account for. Assuming a fairly even split between credit and no credit. Let's start building a few models. We'll start with the simplest (logistic regression) then work out way up (LASSO, Ridge, Elastic, XGBoost, CART)
+
+
+#Model Building
+
+#Simple Logistic Regression
+```{r}
+#start with using all of the variables
+glm_mod_1 = train(
+  form = has_heart_disease ~ ., #predicting class on all variables available
+  data = train.data, #data set to build the model on
+  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
+  method = "glm", #glm model
+  family = "binomial" #response type
+)
+
+glm_mod_1
+summary(glm_mod_1)
+
+#we get a warning for this model because there are too many predictors for the model to handle, which is resulting in overfitting and multicolinearity. We can.....narrow down the list and select only a handful of predictors or we can continue on and hope the other methods help to resolve this issue. Let's start with reducing the variables based on our EDA
+```
+
+```{r}
+#select the variables that looked important through the EDA
+#gender; resting_electro; exer_angina; thal; exter_angina; age, chest_pain, max_heart_rate, old_peak, and num_vessels_flour
+glm_mod_2 = train(
+  form = has_heart_disease ~ gender + resting_electro + exer_angina + thal + exter_angina +
+    age + chest_pain + max_heart_rate + oldpeak + num_vessels_flour, 
+  data = train.data, #data set to build the model on
+  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
+  method = "glm", #glm model
+  family = "binomial" #response type
+)
+
+glm_mod_2
+summary(glm_mod_2)
+#still too many variables
+```
+
+```{r}
+#select the variables from the model below; stepwise selection with AIC
+glm_mod_3 = train(
+  form = has_heart_disease ~ gender + chest_pain + resting_blood_pressure + 
+    resting_electro + max_heart_rate + exer_angina + oldpeak + 
+    num_vessels_flour + thal, 
+  data = train.data, #data set to build the model on
+  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
+  method = "glm", #glm model
+  family = "binomial" #response type
+)
+
+glm_mod_3
+summary(glm_mod_3)
+#Great! No error. We'll use this version for comparison across the models. Gets the exact same results as the below model.
+```
+
+
+
+
+Stepwise variable selection using AIC
+From stepwise variable selection method using AIC, the significant variables are:
+```{r}
+disease.glm0 <- glm(has_heart_disease ~ ., family = binomial, train.data)
+disease.glm.step <- step(disease.glm0, direction = "backward")
+summary(disease.glm.step)
+```
+#
+So to summarize, the basic principles that guide the use of the AIC are:
+Lower indicates a more parsimonious model, relative to a model fit with a higher AIC.
+It is a relative measure of model parsimony, so it only has meaning if we compare the AIC for alternate hypotheses (= different models of the data).
+We can compare non-nested models. For instance, we could compare a linear to a non-linear model.
+The comparisons are only valid for models that are fit to the same response data (ie values of y).
+Model selection conducted with the AIC will choose the same model as leave-one-out cross validation (where we leave out one data point and fit the model, then evaluate its fit to that point) for large sample sizes.
+You shouldn’t compare too many models with the AIC. You will run into the same problems with multiple model comparison as you would with p-values, in that you might by chance find a model with the lowest AIC, that isn’t truly the most appropriate model.
+When using the AIC you might end up with multiple models that perform similarly to each other. So you have similar evidence weights for different alternate hypotheses. In the example above m3 is actually about as good as m1.
+You should correct for small sample sizes if you use the AIC with small sample sizes, by using the AICc statistic.
+
+#Boosted Logistic Regression
+```{r}
+#tuning parameter available: nTter
+logboost_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "LogitBoost", #boosted logistic model
+  family = "binomial" 
+)
+
+logboost_mod_1
+summary(logboost_mod_1)
+#works okay. Let's tune the model (only option is nIter) to see if we can improve accuracy slightly. If not, we'll move on quickly. Looks like we maximize accuracy from 11-21 iterations, so probably not beneficial to move beyond that. (see decrease in accuracy at 31.)
+```
+
+
+```{r}
+#tuning parameter available: nTter
+logboost_mod_2 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, #data set to build the model on
+  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
+  nIter = 41,
+  method = "LogitBoost", #boosted logistic model
+  family = "binomial" #response type
+)
+
+logboost_mod_2
+summary(logboost_mod_2)
+#more iterations doesn't help, selects the final model from 11 iterations. Just using the default is acceptable in this case.
+```
+
+Ridge and lasso aren't in the handbook for regression models
+
+
+
+
+#Bagged Logic Regression
+```{r}
+#method = 'ORFlog'
+#tuning parameter available: nleaves, ntrees
+logicBag_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, #data set to build the model on
+  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
+  ntrees = 10,
+  method = "logicBag", #Oblique Random Forest
+  family = "binomial" #response type
+)
+
+logicBag_mod_1
+summary(logicBag_mod_1)
+#more iterations doesn't help, selects the final model from 11 iterations. Just using the default is acceptable in this case.
+```
+
+
+
+#Errors
+RMSE for regression
+  common to calculate in sample RMSE (too optomistic, leads to overfitting)
+  better to calculate out of sample error (simulates real world use, helps avoid overfitting)
+
+
+
+
+
+
+#Modeling NA's to replace them.
+```{r}
+# Excluding all NA rows from the data, in this case, NAs are not the main issue to solve, so we'll skip the 6 cases which have NA (or missing values).
+heart_disease=na.omit(heart_disease)
+
+# Setting a 4-fold cross-validation
+fitControl = trainControl(method = "cv",
+                           number = 4,
+                           classProbs = TRUE,
+                           summaryFunction = twoClassSummary)
+
+# Creating the random forest model, finding the best tuning parameter set
+set.seed(999)
+fit_rf = train(x=select(heart_disease, -has_heart_disease, -heart_disease_severity),
+             y = heart_disease$has_heart_disease,
+             method = "rf",
+             trControl = fitControl,
+             verbose = FALSE,
+             metric = "ROC")
+
+# Creating the gradient boosting machine model, finding the best tuning parameter set
+fit_gbm = train(x=select(heart_disease, -has_heart_disease, -heart_disease_severity),
+             y = heart_disease$has_heart_disease,
+             method = "gbm",
+             trControl = fitControl,
+             verbose = FALSE,
+             metric = "ROC")
+
+
+
+
+# Here we manipulate to show a nice the table described before
+var_imp_rf=data.frame(varImp(fit_rf, scale=T)["importance"]) %>%
+  dplyr::mutate(variable=rownames(.)) %>% dplyr::rename(importance_rf=Overall) %>%
+  dplyr::arrange(-importance_rf) %>%
+  dplyr::mutate(rank_rf=seq(1:nrow(.)))
+
+var_imp_gbm=as.data.frame(varImp(fit_gbm, scale=T)["importance"])  %>%
+  dplyr::mutate(variable=rownames(.)) %>% dplyr::rename(importance_gbm=Overall) %>%
+  dplyr::arrange(-importance_gbm) %>%
+  dplyr::mutate(rank_gbm=seq(1:nrow(.)))                                                                                                                            
+final_res=merge(var_imp_rf, var_imp_gbm, by="variable")
+
+final_res$rank_diff=final_res$rank_rf-final_res$rank_gbm
+
+# Printing the results!
+final_res
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#The importance of features can be estimated from data by building a model. Some methods like decision trees have a built in mechanism to report on variable importance. For other algorithms, the importance can be estimated using a ROC curve analysis conducted for each attribute. The most important have the highest value.
+```{r}
+# prepare training scheme
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+# train the model
+model <- train(Class~., data=GermanCredit, 
+               method="lvq", 
+               preProcess="scale", 
+               trControl=control)
+# estimate variable importance
+importance <- varImp(model, scale=FALSE)
+# summarize importance
+print(importance)
+# plot importance
+plot(importance)
+
+ggplot(model)
+
+```
+
+
+
+
+
+
+#Automatic feature selection methods can be used to build many models with different subsets of a dataset and identify those attributes that are and are not required to build an accurate model.
+
+A popular automatic method for feature selection provided by the caret R package is called Recursive Feature Elimination or RFE.
+
+The example below provides an example of the RFE method on the Pima Indians Diabetes dataset. A Random Forest algorithm is used on each iteration to evaluate the model. The algorithm is configured to explore all possible subsets of the attributes. All 8 attributes are selected in this example, although in the plot showing the accuracy of the different attribute subset sizes, we can see that just 4 attributes gives almost comparable results.
+
+
+
+#APPENDIX
+#Other Viz
+```{r}
+#continuous
+GermanCredit %>%
+  ggplot(aes(x= Class, y = Duration)) +
+  geom_boxplot(aes(fill=as.factor(Class)))
+#categorical
+GermanCredit %>%
+  ggplot(., aes(InstallmentRatePercentage, ..count..)) + 
+  geom_bar(aes(fill = Class), position = "dodge") 
+```
+
+#Correlation
+The following can be used fore feature selection: In this post you discovered 3 feature selection methods provided by the caret R package. Specifically, searching for and removing redundant features, ranking features by importance and automatically selecting a subset of the most predictive features.
+
+#Generally, you want to remove attributes with an absolute correlation of 0.75 or higher BETWEEN EACH OTHER.
+```{r}
+# calculate correlation matrix
+correlationMatrix <- cor(GermanCredit[,1:8])
+# summarize the correlation matrix
+print(correlationMatrix)
+# find attributes that are highly corrected (ideally >0.75)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+# print indexes of highly correlated attributes
+print(highlyCorrelated)
+```
+
+
+

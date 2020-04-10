@@ -1,0 +1,236 @@
+---
+title: "Categorical Practice"
+---
+
+The following document runs through the different components of a categorical takehome challenge, based on the categorical feature encoding challenge II (includes missing values and interactions) from Kaggle. The data set is a binary classificaiton problem with features and interactions. 
+
+From the problem:
+In this competition, you will be predicting the probability [0, 1] of a binary target column.
+
+The data contains binary features (bin_*), nominal features (nom_*), ordinal features (ord_*) as well as (potentially cyclical) day (of the week) and month features. The string ordinal features ord_{3-5} are lexically ordered according to string.ascii_letters.
+
+Since the purpose of this competition is to explore various encoding strategies. Unlike the first Categorical Feature Encoding Challenge, the data for this challenge has missing values and feature interactions.
+
+#Strategy:
+1. load libraries
+2. load data
+3. EDA
+4. Cleaning
+5. Feature Engineering
+6. Training/Testing Sets
+7. Model selection and building iteration
+8. Model Comparison
+9. Visualizations
+10. Results/Next Steps
+
+#1. load libraries
+```{r}
+#load libraries
+pacman::p_load(funModeling, dataMaid, Hmisc, ggcorrplot, caret, randomForest, glmnet, forecast, tidyverse, lubridate)
+```
+
+
+#2. load data
+```{r}
+cat_data <- read.csv('train.csv', header=TRUE)
+```
+
+
+#3. EDA
+#Proper exploratory analysis is about answering questions. It's about extracting enough insights from your dataset to course correct before you get lost in the weeds.
+#helps to...get hints for data cleaning, get ideas for feature engineering, get a feel for the data set for insights, but be QUICK, EFFICINET, and DECISIVE
+#first look at...
+#How many observations do I have?
+#How many features?
+#What are the data types of my features? Are they numeric? Categorical?
+#Do I have a target variable?
+#Do the columns make sense?
+#Do the values in those columns make sense?
+#Are the values on the right scale?
+#Is missing data going to be a big problem based on a quick eyeball test?
+
+#plot (numeric) features with histograms, and look for the following:
+#Distributions that are unexpected
+#Potential outliers that don't make sense
+#Features that should be binary (i.e. "wannabe indicator variables")
+#Boundaries that don't make sense
+#Potential measurement errors
+
+#plot categorical features with bar charts: In particular, you'll want to look out for sparse classes, which are classes that have a very small number of observations.
+#They tend to be problematic when building models.
+#In the best case, they don't influence the model much.
+#In the worse case, they can cause the model to be overfit.
+#Therefore, we recommend making a note to combine or reassign some of these classes later. We prefer saving this until Feature Engineering (Lesson 4).
+
+#Segmentations are powerful ways to observe the relationship between categorical features and numeric features.
+#Box plots allow you to do so.
+#Here are a few insights you could draw from the following chart.
+#The median transaction price (middle vertical bar in the box) for Single-Family homes was much higher than that for Apartments / Condos / Townhomes.
+#The min and max transaction prices are comparable between the two classes.
+#In fact, the round-number min ($200k) and max ($800k) suggest possible data truncation...
+#...which is very important to remember when assessing the generalizability of your models later!
+
+#correlations
+#correlations allow you to look at the relationships between numeric features and other numeric features.
+#Correlation is a value between -1 and 1 that represents how closely two features move in unison. You don't need to remember the math to calculate them. Just know the following intuition:
+
+#Positive correlation means that as one feature increases, the other increases. E.g. a child’s age and her height.
+#Negative correlation means that as one feature increases, the other decreases. E.g. hours spent studying and number of parties attended.
+#Correlations near -1 or 1 indicate a strong relationship.
+#Those closer to 0 indicate a weak relationship.
+#0 indicates no relationship.
+#Correlation heatmaps help you visualize this information. 
+#In general, you should look out for:
+#Which features are strongly correlated with the target variable?
+#Are there interesting or unexpected strong correlations between other features?
+#Again, your aim is to gain intuition about the data, which will help you throughout the rest of the workflow.
+```{r}
+html(describe(cat_data)) #Check min and max values (outliers); Check Distributions (same as before)
+glimpse(cat_data)
+
+basic_eda <- function(data)
+{
+  #glimpse(data) #This is like a transposed version of print: columns run down the page, and data runs across
+  df_status(data) #Quantity and percentage of zeros and q/p of na values
+  freq(data) #Calculates absolute and relative frequencies of a vector x. Continuous (numeric) variables will be cut using the same logic as used by the function hist. Categorical variables will be aggregated by table. The result will contain single and cumulative frequencies for both, absolute values and percentages.
+  profiling_num(data) #Get a metric table with many indicators for all numerical variables, automatically skipping the non-numerical variables. Current metrics are: mean, std_dev: standard deviation, all the p_XX: percentile at XX number, skewness, kurtosis, iqr: inter quartile range, variation_coef: the ratio of sd/mean, range_98 is the limit for which the 98
+  plot_num(data) #Retrieves one plot containing all the histograms for numerical variables. NA values will not be displayed.
+  describe(data) # This function determines whether the variable is character, factor, category, binary, discrete numeric, and continuous numeric, and prints a concise statistical summary according to each. A numeric variable is deemed discrete if it has <= 10 distinct values. In this case, quantiles are not printed. A frequency table is printed for any non-binary variable if it has no more than 20 distinct values. For any variable for which the frequency table is not printed, the 5 lowest and highest values are printed.
+}
+
+basic_eda(cat_data)
+
+data_prof=profiling_num(cat_data) #for numeric data.  Try to describe each variable based on its distribution (also useful for reporting) Pay attention to variables with high standard deviation.
+data_prof
+
+data_prof %>% 
+  select(variable, variation_coef, range_98)
+  #A high value in variation_coef may indictate outliers. range_98 indicates where most of the values are.
+```
+
+Notes about the 'glimpse' of the data:
+it looks like we have missing values that we'll need to deal with.
+bin_3 should be classified as a factor, as should all the other bin values. 
+bin's 3 & 4 will need indicator variables built for modeling
+nominal's will need indicator values assigned
+the ordinals should all be trrated as factors then assigned values
+
+Notes about status:
+bins 0-3 have a lot of missing values that will need to be dealt with.
+ord_0, day, month also have a lot of na's
+
+It looks like we have too many missing values to drop them, so we'll replace them and give indicators
+
+Notes about freq.
+freq wasn't run for all of the variables that we expect since not all were classified correctly, but it give us a good sense of the distributions, especially when looking at the plots.
+
+It looks like overall, we're missing 3% of the variables form categories with missing data.
+
+For nom_1 we may want to combine categories, square and star are very small
+Same with nom 2: cat and snake.
+etc.
+But we would ideally have a good business sense reason to group them together.
+
+Do we see any clear outliers? No
+
+
+#Check for class bias in the predictor variable
+Check Class bias
+Ideally, the proportion of events and non-events in the Y variable should approximately be the same. So, lets first check the proportion of classes in the dependent variable 'target'
+```{r}
+table(cat_data$target)
+```
+
+We have a really big imbalance between the 0's and 1's so when we sample for training/testing we shouls account for this. It will help improve the accuracy of the model.
+
+```{r}
+# Create Training Data
+input_ones <- inputData[which(inputData$ABOVE50K == 1), ]  # all 1's
+input_zeros <- inputData[which(inputData$ABOVE50K == 0), ]  # all 0's
+set.seed(100)  # for repeatability of samples
+input_ones_training_rows <- sample(1:nrow(input_ones), 0.7*nrow(input_ones))  # 1's for training
+input_zeros_training_rows <- sample(1:nrow(input_zeros), 0.7*nrow(input_ones))  # 0's for training. Pick as many 0's as 1's
+training_ones <- input_ones[input_ones_training_rows, ]  
+training_zeros <- input_zeros[input_zeros_training_rows, ]
+trainingData <- rbind(training_ones, training_zeros)  # row bind the 1's and 0's 
+
+# Create Test Data
+test_ones <- input_ones[-input_ones_training_rows, ]
+test_zeros <- input_zeros[-input_zeros_training_rows, ]
+testData <- rbind(test_ones, test_zeros)  # row bind the 1's and 0's 
+```
+
+#WOE
+WOE transformations help when you have both numeric and categorical data that you need to combine and missing values throughout that you would like to extract information from. Converting everything to WOE helps "standardize" many different types of data (even missing data) onto the the same log odds scale. This blog post explains things reasonably well: http://multithreaded.stitchfix.com/blog/2015/08/13/weight-of-evidence/
+
+The short of the story is that Logistic Regression with WOE, should just be (and is) called a Semi-Naive Bayesian Classifier (SNBC). If you are trying to understand the algorithm, the name SNBC is, to me, far more informative.
+
+
+
+
+#Training/Testing when 0/1 are equal ish
+```{r}
+# Split the data into training and test set
+set.seed(123)
+training.samples <- PimaIndiansDiabetes2$diabetes %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- PimaIndiansDiabetes2[training.samples, ]
+test.data <- PimaIndiansDiabetes2[-training.samples, ]
+```
+
+
+
+
+
+
+Compute Information Values
+The smbinning::smbinning function converts a continuous variable into a categorical variable using recursive partitioning. We will first convert them to categorical variables and then, capture the information values for all variables in iv_df
+
+library(smbinning)
+# segregate continuous and factor variables
+factor_vars <- c ("WORKCLASS", "EDUCATION", "MARITALSTATUS", "OCCUPATION", "RELATIONSHIP", "RACE", "SEX", "NATIVECOUNTRY")
+continuous_vars <- c("AGE", "FNLWGT","EDUCATIONNUM", "HOURSPERWEEK", "CAPITALGAIN", "CAPITALLOSS")
+
+iv_df <- data.frame(VARS=c(factor_vars, continuous_vars), IV=numeric(14))  # init for IV results
+
+# compute IV for categoricals
+for(factor_var in factor_vars){
+  smb <- smbinning.factor(trainingData, y="ABOVE50K", x=factor_var)  # WOE table
+  if(class(smb) != "character"){ # heck if some error occured
+    iv_df[iv_df$VARS == factor_var, "IV"] <- smb$iv
+  }
+}
+
+# compute IV for continuous vars
+for(continuous_var in continuous_vars){
+  smb <- smbinning(trainingData, y="ABOVE50K", x=continuous_var)  # WOE table
+  if(class(smb) != "character"){  # any error while calculating scores.
+    iv_df[iv_df$VARS == continuous_var, "IV"] <- smb$iv
+  }
+}
+
+iv_df <- iv_df[order(-iv_df$IV), ]  # sort
+iv_df
+#>           VARS     IV
+#>   RELATIONSHIP 1.5739
+#>  MARITALSTATUS 1.3356
+#>            AGE 1.1748
+#>    CAPITALGAIN 0.8389
+#>     OCCUPATION 0.8259
+#>   EDUCATIONNUM 0.7776
+#>      EDUCATION 0.7774
+#>   HOURSPERWEEK 0.4682
+#>            SEX 0.3087
+#>      WORKCLASS 0.1633
+#>    CAPITALLOSS 0.1507
+#>  NATIVECOUNTRY 0.0815
+#>           RACE 0.0607
+#>         FNLWGT 0.0000
+Build Logit Models and Predict
+logitMod <- glm(ABOVE50K ~ RELATIONSHIP + AGE + CAPITALGAIN + OCCUPATION + EDUCATIONNUM, data=trainingData, family=binomial(link="logit"))
+
+predicted <- plogis(predict(logitMod, testData))  # predicted scores
+# or
+predicted <- predict(logitMod, testData, type="response")  # predicted scores
+A quick note about the plogis function: The glm() procedure with family="binomial" will build the logistic regression model on the given formula. When we use the predict function on this model, it will predict the log(odds) of the Y variable. This is not what we ultimately want because, the predicted values may not lie within the 0 and 1 range as expected. So, to convert it into prediction probability scores that is bound between 0 and 1, we use the plogis().
+
