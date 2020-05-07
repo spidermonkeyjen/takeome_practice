@@ -218,8 +218,9 @@ correlation_table(data=heart_disease_all, target="has_heart_disease") #retrieves
 Look for correlation between the numeric features. We want to remove any varibales that are highly correlated with each other.
 ```{r}
 #Check for correlation between numeric values
-heart_disease_numeric <- heart_disease_2 %>%
-  select(age, chest_pain, resting_blood_pressure, serum_cholestoral, max_heart_rate, oldpeak, slope, num_vessels_flour)
+heart_disease_numeric <- heart_disease %>%
+  select(age, chest_pain, resting_blood_pressure, serum_cholestoral, max_heart_rate, oldpeak, slope, num_vessels_flour) %>%
+  mutate(chest_pain = as.numeric(chest_pain))
 
 # calculate correlation matrix between numeric values. Remove one of a piar that is highly correlated as to remove duplicates
 correlationMatrix <- cor(heart_disease_numeric)
@@ -347,6 +348,8 @@ ggplot(df_predictive,
   xlab("") + 
   ylab("Variable Importance (based on MIC)") + 
   guides(fill=FALSE)
+
+#we know heart_disease_severity will be dropped, so we could rerun this plot to really see the importance of the other varibales.
 ```
 
 
@@ -377,6 +380,14 @@ train.data  <- heart_disease_all[training.samples, ]
 test.data <- heart_disease_all[-training.samples, ]
 ```
 Notes: no missing values in the response to account for. Assuming a fairly even split between credit and no credit. Let's start building a few models. We'll start with the simplest (logistic regression) then work out way up (LASSO, Ridge, Elastic, XGBoost, CART)
+Training Dataset: The sample of data used to fit the model.
+Validation Dataset: The sample of data used to provide an unbiased evaluation of a model fit on the training dataset while tuning model hyperparameters. The evaluation becomes more biased as skill on the validation dataset is incorporated into the model configuration.
+Test Dataset: The sample of data used to provide an unbiased evaluation of a final model fit on the training dataset.
+The Test dataset provides the gold standard used to evaluate the model. It is only used once a model is completely trained(using the train and validation sets). The test set is generally what is used to evaluate competing models (For example on many Kaggle competitions, the validation set is released initially along with the training set and the actual test set is only released when the competition is about to close, and it is the result of the the model on the Test set that decides the winner). Many a times the validation set is used as the test set, but it is not good practice. The test set is generally well curated. It contains carefully sampled data that spans the various classes that the model would face, when used in the real world.
+There are multiple ways to do this, and is commonly known as Cross Validation. Basically you use your training set to generate multiple splits of the Train and Validation sets. Cross validation avoids over fitting and is getting more and more popular, with K-fold Cross Validation being the most popular method of cross validation
+
+Another method for customizing the tuning process is to modify the algorithm that is used to select the “best” parameter values, given the performance numbers. By default, the train function chooses the model with the largest performance value
+train allows the user to specify alternate rules for selecting the final model. The argument selectionFunction can be used to supply a function to algorithmically determine the final model. There are three existing functions in the package: best is chooses the largest/smallest value, oneSE attempts to capture the spirit of Breiman et al (1984) and tolerance selects the least complex model within some percent tolerance of the best value. See ?best for more details.
 
 
 #Model Building
@@ -384,6 +395,8 @@ Notes: no missing values in the response to account for. Assuming a fairly even 
 #Simple Logistic Regression
 ```{r}
 #start with using all of the variables
+set.seed(123)
+
 glm_mod_1 = train(
   form = has_heart_disease ~ ., #predicting class on all variables available
   data = train.data, #data set to build the model on
@@ -401,6 +414,8 @@ summary(glm_mod_1)
 ```{r}
 #select the variables that looked important through the EDA
 #gender; resting_electro; exer_angina; thal; exter_angina; age, chest_pain, max_heart_rate, old_peak, and num_vessels_flour
+set.seed(123)
+
 glm_mod_2 = train(
   form = has_heart_disease ~ gender + resting_electro + exer_angina + thal + exter_angina +
     age + chest_pain + max_heart_rate + oldpeak + num_vessels_flour, 
@@ -415,8 +430,34 @@ summary(glm_mod_2)
 #still too many variables
 ```
 
+#glmStepAIC
+Generalized Linear Model with Stepwise Feature Selection
+```{r}
+#GLM STEP IN CARET
+#method: glmStepAIC
+#tuning: none
+set.seed(123)
+
+glmSTEP_mod = train(
+  form = has_heart_disease ~ gender + chest_pain + resting_blood_pressure + 
+    resting_electro + max_heart_rate + exer_angina + oldpeak + 
+    num_vessels_flour + thal, 
+  data = train.data, #data set to build the model on
+  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
+  method = "glmStepAIC", #glm model
+  family = "binomial" #response type
+)
+
+glmSTEP_mod
+summary(glmSTEP_mod)
+```
+
+
+
 ```{r}
 #select the variables from the model below; stepwise selection with AIC
+set.seed(123)
+
 glm_mod_3 = train(
   form = has_heart_disease ~ gender + chest_pain + resting_blood_pressure + 
     resting_electro + max_heart_rate + exer_angina + oldpeak + 
@@ -438,6 +479,8 @@ summary(glm_mod_3)
 Stepwise variable selection using AIC
 From stepwise variable selection method using AIC, the significant variables are:
 ```{r}
+set.seed(123)
+
 disease.glm0 <- glm(has_heart_disease ~ ., family = binomial, train.data)
 disease.glm.step <- step(disease.glm0, direction = "backward")
 summary(disease.glm.step)
@@ -456,6 +499,8 @@ You should correct for small sample sizes if you use the AIC with small sample s
 #Boosted Logistic Regression
 ```{r}
 #tuning parameter available: nTter
+set.seed(123)
+
 logboost_mod_1 = train(
   form = has_heart_disease ~ ., 
   data = train.data, 
@@ -467,54 +512,375 @@ logboost_mod_1 = train(
 logboost_mod_1
 summary(logboost_mod_1)
 #works okay. Let's tune the model (only option is nIter) to see if we can improve accuracy slightly. If not, we'll move on quickly. Looks like we maximize accuracy from 11-21 iterations, so probably not beneficial to move beyond that. (see decrease in accuracy at 31.)
-```
-
-
-```{r}
-#tuning parameter available: nTter
-logboost_mod_2 = train(
-  form = has_heart_disease ~ ., 
-  data = train.data, #data set to build the model on
-  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
-  nIter = 41,
-  method = "LogitBoost", #boosted logistic model
-  family = "binomial" #response type
-)
-
-logboost_mod_2
-summary(logboost_mod_2)
 #more iterations doesn't help, selects the final model from 11 iterations. Just using the default is acceptable in this case.
 ```
 
-Ridge and lasso aren't in the handbook for regression models
+
+Ridge and lasso aren't in the handbook for *logistic* regression models
 
 
 
-
-#Bagged Logic Regression
+#Bayes. Genneralized Linear Model
+method = 'bayesglm'
+no tuning parameters
 ```{r}
-#method = 'ORFlog'
-#tuning parameter available: nleaves, ntrees
-logicBag_mod_1 = train(
+set.seed(123)
+
+bayesglm_mod_1 = train(
   form = has_heart_disease ~ ., 
   data = train.data, #data set to build the model on
   trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
-  ntrees = 10,
-  method = "logicBag", #Oblique Random Forest
+  method = "bayesglm", #bayesian generalized linear model
   family = "binomial" #response type
 )
 
-logicBag_mod_1
-summary(logicBag_mod_1)
-#more iterations doesn't help, selects the final model from 11 iterations. Just using the default is acceptable in this case.
+bayesglm_mod_1
+summary(bayesglm_mod_1)
+#just as accurate as one of the above models
 ```
 
+
+#Ordered Logistic or Probit Regression (response must have 3 or more levels!! Didn't run)
+method = 'polr'
+
+
+#Penalized Logistic Regression: doesn't work
+  method = 'plr'
+Tuning parameters:
+lambda (L2 Penalty)
+cp (Complexity Parameter)
+
+
+
+#CART
+model tuning: cp
+
+Briefly, our goal here is to see if a smaller subtree can give us comparable results to the fully grown tree. If yes, we should go for the simpler tree because it reduces the likelihood of overfitting.
+One possible robust strategy of pruning the tree (or stopping the tree to grow) consists of avoiding splitting a partition if the split does not significantly improves the overall quality of the model.
+In rpart package, this is controlled by the complexity parameter (cp), which imposes a penalty to the tree for having two many splits. The default value is 0.01. The higher the cp, the smaller the tree.
+A too small value of cp leads to overfitting and a too large cp value will result to a too small tree. Both cases decrease the predictive performance of the model.
+An optimal cp value can be estimated by testing different cp values and using cross-validation approaches to determine the corresponding prediction accuracy of the model. The best cp is then defined as the one that maximize the cross-validation accuracy (Chapter @ref(cross-validation)).
+Pruning can be easily performed in the caret package workflow, which invokes the rpart method for automatically testing different possible values of cp, then choose the optimal cp that maximize the cross-validation (“cv”) accuracy, and fit the final best CART model that explains the best our data.
+*tuneLength, to specify the number of possible cp values to evaluate. Default value is 3, here we’ll use 10.
+```{r}
+set.seed(123)
+
+rpart_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, #data set to build the model on
+  trControl = trainControl(method = "cv", number = 10), #perform 10 fold cross validation; method specifies how the sampling should be completed
+  method = "rpart", #logistic model trees
+  tuneLength = 10
+)
+
+rpart_mod_1
+plot(rpart_mod_1)
+```
+
+```{r}
+#plot the tree
+par(xpd = NA)
+plot(rpart_mod_1$finalModel)
+text(rpart_mod_1$finalModel,  digits = 3)
+```
+
+
+#Bagged CART
+method = treebag
+tuning: none
+```{r}
+set.seed(123)
+
+brpart_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "treebag"
+)
+
+brpart_mod_1
+```
+
+#GBM (gradient Boosted Machine)
+Gradient boosting is a machine learning technique for regression and classification problems, which produces a prediction model in the form of an ensemble of weak prediction models, typically decision trees. It builds the model in a stage-wise fashion like other boosting methods do, and it generalizes them by allowing optimization of an arbitrary differentiable loss function.
+```{r}
+#method: gbm
+#Stochastic Gradient Boosting Machines
+#tuning: n.trees, interaction.depth, shrinkage, n.minobsinnode
+set.seed(123)
+
+gbm_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "gbm"
+)
+
+gbm_mod_1
+summary(gbm_mod_1)
+```
+
+#SVM
+```{r}
+#method = svmLinearWeights2
+#tuning: cost, Loss, weight
+set.seed(123)
+
+svm_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "svmLinearWeights2"
+)
+
+svm_mod_1
+summary(svm_mod_1$finalModel)
+```
+
+#glmnet
+This one is the most accurate. Cool!
+```{r}
+#method = glmnet
+#tuning: alpha, lambda
+set.seed(123)
+
+glmnet_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "glmnet"
+)
+
+glmnet_mod_1
+summary(glmnet_mod_1$finalModel)
+```
+
+#Linear Discriminant Analysis
+Linear Discriminant Analysis with Stepwise Feature Selection; not as accurate.
+There are a few other kinds of LDA we could try (regularized, penalized, robust, sparse) if wanted.
+```{r}
+#lda from the MASS package
+#method = stepLDA
+#tuning: maxvar, direction
+set.seed(123)
+
+lda_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "stepLDA"
+)
+
+lda_mod_1
+summary(lda_mod_1$finalModel)
+```
+
+#simple neural network
+```{r}
+#method: nnet
+#tuning: size, decay
+set.seed(123)
+
+nnet_mod_1 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "nnet"
+)
+
+nnet_mod_1
+summary(nnet_mod_1$finalModel)
+```
+
+#Neural Networks with Feature Extraction
+```{r}
+#method: pcaNNet
+#tuning: size, decay
+set.seed(123)
+
+nnet_mod_2 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "pcaNNet"
+)
+
+nnet_mod_2
+summary(nnet_mod_2$finalModel)
+#also not very accurate. both of the above could be tuned, but not needed
+```
+
+
+#random forest
+can also try: oblique rf, or regularized rf
+```{r}
+#method = rf
+#tuning= mtry
+set.seed(123)
+
+rf_mod_2 = train(
+  form = has_heart_disease ~ ., 
+  data = train.data, 
+  trControl = trainControl(method = "cv", number = 10),
+  method = "rf"
+)
+
+rf_mod_2
+summary(rf_mod_2$finalModel)
+#accuracy is similar to some of the earlier models, no problem. Worth comparing the testing results with as well.
+```
+
+
+glm X (have multiple glm (logistic regression) and a bayesian glm model)
+rpart (have and have bagged rpart (CART method))
+stochastic Gradient Boosting (method: gbm).
+svm (need to make)
+glmnet (method glmnet).
+Linear discriminant analysis (method: lda).
+Neural Network (method: nnet).
+Random Forest (method : rf).
+
+
+
+
+
+########
+##Compare Models to Select a Winner
+########
+It is useful to get an idea of the spread of the models, perhaps one can be improved, or you can stop working on one that is clearly performing worse than the others.
+Each model is automatically tuned and is evaluated using 3 repeats of 10-fold cross validation.
+The random number seed is set before each algorithm is trained to ensure that each algorithm gets the same data partitions and repeats. This allows us to compare apples to apples in the final results.
+
+I will use the same training/test split.
+The learning problem(as an example) is the binary classification problem; predict customer churn. the data set can be found here.
+Data pre-Processing has been performed using the recipe method.
+A common setting/trainControl will be created, which will be shared by all considered classifiers(this will allow us to fit the models under the same conditions).
+For tuning the hyperparameters the method adaptive_cv will be used (also allow us to reduce the tuning time).
+
+Once the models are trained and an optimal parameter configuration found for each, the accuracy results from each of the best models are collected. Each “winning” model has 30 results (3 repeats of 10-fold cross validation). The objective of comparing results is to compare the accuracy distributions (30 values) between the models.
+
+This is done in three ways. The distributions are summarized in terms of the percentiles. The distributions are summarized as box plots and finally the distributions are summarized as dot plots.
+
+```{r}
+#example comparison:
+#If you needed to make strong claims about which algorithm was better, you could also use statistical hypothesis tests to statistically show that the differences in the results were significant. Something like a Student t-test if the results are normally distributed or a rank sum test if the distribution is unknown. In this post you discovered how you can use the caret R package to compare the results from multiple different models, even after their parameters have been optimized. You saw three ways the results can be compared, in table, box plot and a dot plot. The examples in this post are standalone and you can easily copy-and-paste them into your own project and adapt them for your problem.
+
+# train the SVM model
+set.seed(7)
+modelSvm <- train(diabetes~., data=PimaIndiansDiabetes, method="svmRadial", trControl=control)
+# collect resamples
+results <- resamples(list(LVQ=modelLvq, GBM=modelGbm, SVM=modelSvm))
+# summarize the distributions
+summary(results)
+# boxplots of results
+bwplot(results)
+# dot plots of results
+dotplot(results)
+```
+
+#For our top performing models, let's use the following to create a confusion matrix and get accuracy for the best models. We can pull the best models from the chart in the caretList file where all model accuraies are compared.
+The most accurate models per that plot: svmLinearWeights2, glmnet, rf, gbm
+These functions are wrappers for the specific prediction functions in each modeling package. In each case, the optimal tuning values given in the tuneValue slot of the finalModel object are used to predict.
+```{r}
+predict_svm <- predict.train(svm_mod_1, testing)
+table(predict_svm)
+confusionMatrix(predict_svm, testing[,"has_heart_disease"])
+
+predict_glmnet <- predict.train(glmnet_mod_1, testing)
+table(predict_glmnet)
+confusionMatrix(predict_glmnet, testing[,"has_heart_disease"])
+
+predict_rf <- predict.train(rf_mod_2, testing)
+table(predict_rf)
+confusionMatrix(predict_rf, testing[,"has_heart_disease"])
+
+predict_gbm <- predict.train(gbm_mod_1, testing)
+table(predict_gbm)
+confusionMatrix(predict_gbm, testing[,"has_heart_disease"])
+
+#gbm model has the highest accuracy on the test set. Se we will use it as our 'winner' and interpret it's coefficients and results
+plot(gbm_mod_1$finalModel)
+summary(gbm_mod_1$finalModel)
+#relative.influence: At each split in each tree, gbm computes the improvement in the split-criterion (MSE for regression). gbm then averages the improvement made by each variable across all the trees that the variable is used. The variables with the largest average decrease in MSE are considered most important.
+#After the most relevant variables have been identified, the next step is to attempt to understand how the response variable changes based on these variables. For this we can use partial dependence plots (PDPs) and individual conditional expectation (ICE) curves.
+
+#PDPs plot the change in the average predicted value as specified feature(s) vary over their marginal distribution. For example, consider the Gr_Liv_Area variable. The PDP plot below displays the average change in predicted sales price as we vary Gr_Liv_Area while holding all other variables constant. This is done by holding all variables constant for each observation in our training data set but then apply the unique values of Gr_Liv_Area for each observation. We then average the sale price across all the observations. This PDP illustrates how the predicted sales price increases as the square footage of the ground floor in a house increases.
+
+#By definition, the closer the ROC curve comes to the upper left corner in the grid, the better it is. The upper left corner corresponds to a true positive rate of 1 and a false positive rate of 0. This further implies that good classifiers have bigger areas under the curves. As evident, our model has an AUC of 0.8389.
+
+```
+
+Gradient boosted machines (GBMs) are an extremely popular machine learning algorithm that have proven successful across many domains and is one of the leading methods for winning Kaggle competitions. Whereas random forests build an ensemble of deep independent trees, GBMs build an ensemble of shallow and weak successive trees with each tree learning and improving on the previous. When combined, these many weak successive trees produce a powerful “committee” that are often hard to beat with other algorithms. This tutorial will cover the fundamentals of GBMs for regression problems.
+
+Advantages:
+
+Often provides predictive accuracy that cannot be beat.
+Lots of flexibility - can optimize on different loss functions and provides several hyperparameter tuning options that make the function fit very flexible.
+No data pre-processing required - often works great with categorical and numerical values as is.
+Handles missing data - imputation not required.
+Disdvantages:
+
+GBMs will continue improving to minimize all errors. This can overemphasize outliers and cause overfitting. Must use cross-validation to neutralize.
+Computationally expensive - GBMs often require many trees (>1000) which can be time and memory exhaustive.
+The high flexibility results in many parameters that interact and influence heavily the behavior of the approach (number of iterations, tree depth, regularization parameters, etc.). This requires a large grid search during tuning.
+Less interpretable although this is easily addressed with various tools (variable importance, partial dependence plots, LIME, etc.).
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+#Model Evaluation
+#In-sample misclassification rate
+#Keeping cutoff probability as 0.1667, the misclassification rate is:
+
+prob.glm1.insample <- predict(credit.glm.final, type = "response")
+predicted.glm1.insample <- prob.glm1.insample > 0.1667
+predicted.glm1.insample <- as.numeric(predicted.glm1.insample)
+mean(ifelse(german_credit.train$response != predicted.glm1.insample, 1, 0))
+
+#Confusion Matrix
+#Checking for the predictions and seeing the False Positive and False negative values from the below confusion matrix:
+
+table(german_credit.train$response, predicted.glm1.insample, dnn = c("Truth", "Predicted"))
+
+#ROC Plot
+#ROC Plot is plotted below and the AUC is 0.7896875
+
+roc.plot(german_credit.train$response == "1", prob.glm1.insample)
+roc.plot(german_credit.train$response == "1", prob.glm1.insample)$roc.vol$Area
+
+#Out of sample misclassification rate and AUC score
+#We get a misclassification rate of 0.395, and AUC of 0.7734524
+
+prob.glm1.outsample <- predict(credit.glm.final, german_credit.test, type = "response")
+predicted.glm1.outsample <- prob.glm1.outsample > 0.1667
+predicted.glm1.outsample <- as.numeric(predicted.glm1.outsample)
+table(german_credit.test$response, predicted.glm1.outsample, dnn = c("Truth", "Predicted"))
+##      Predicted
+## Truth  0  1
+##     0 58 82
+##     1  9 51
+mean(ifelse(german_credit.test$response != predicted.glm1.outsample, 1, 0))
+## [1] 0.455
+roc.plot(german_credit.test$response == "1", prob.glm1.outsample)
+roc.plot(german_credit.test$response == "1", prob.glm1.outsample)$roc.vol$Area
+
+```
 
 
 #Errors
 RMSE for regression
   common to calculate in sample RMSE (too optomistic, leads to overfitting)
   better to calculate out of sample error (simulates real world use, helps avoid overfitting)
+
 
 
 

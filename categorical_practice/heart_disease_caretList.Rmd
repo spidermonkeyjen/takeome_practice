@@ -1,0 +1,202 @@
+---
+title: "R Notebook"
+---
+#1. load libraries
+```{r}
+#load libraries
+pacman::p_load(funModeling, dataMaid, Hmisc, corrplot, minerva, caret, tidyverse,
+               #libraries for models
+               caretEnsemble, rpart,
+               doParallel)
+```
+
+#2. load data
+The data set is from the funModeling package. The target variable is 'has_heart_disease' (0=bad consumer, 1=good consumer)
+```{r}
+data(heart_disease)
+```
+
+Correcting variable types and removing duplicate column
+```{r}
+heart_disease_all <- na.omit(heart_disease) %>%
+  mutate(chest_pain = as.numeric(chest_pain),
+         exer_angina = as.factor(exer_angina)) %>%
+  select(-heart_disease_severity)
+```
+
+#Train/Test
+Create Training and Testing Sets with an 80% split.
+```{r}
+set.seed(123)
+training.samples <- heart_disease_all$has_heart_disease %>% 
+  createDataPartition(p = 0.75, list = FALSE) #from caret package; stratified random sample w/in response variable, ie it keeps the balance
+training  <- heart_disease_all[training.samples, ]
+testing <- heart_disease_all[-training.samples, ]
+```
+trControl = trainControl(method = "cv", number = 10)
+
+Model types run:
+glmStepAIC, LogitBoost, bayesglm, rpart, treebag, gbm, svmLinearWeights2, glmnet, stepLDA, nnet, pcaNNet, rf
+
+```{r}
+#Adapted from the caret vignette
+registerDoParallel(4)
+getDoParWorkers()
+
+my_control <- trainControl(
+  method = "cv",
+  number = 5, # number of k-folds
+  savePredictions = "final",
+  classProbs=TRUE,
+  index=createResample(training$has_heart_disease, 25),
+  allowParallel = TRUE)
+
+
+model_list <- caretList(
+  has_heart_disease ~ ., data=training,
+  trControl = my_control,
+  methodList = c("LogitBoost", "rpart"))
+
+p <- as.data.frame(predict(model_list, newdata=head(testing)))
+print(p)
+```
+
+
+Adding more models:
+```{r}
+model_list_2 <- caretList(
+  has_heart_disease ~ ., data=training,
+  trControl = my_control,
+  methodList = c("glmStepAIC", "LogitBoost", "bayesglm", "rpart", "treebag", "gbm", "svmLinearWeights2", "glmnet", "stepLDA", "nnet", "pcaNNet", "rf"))
+
+p2 <- as.data.frame(predict(model_list_2, newdata=head(testing)))
+print(p2)
+
+xyplot(resamples(model_list_2))
+modelCor(resamples(model_list_2))
+
+```
+
+Now that our caretList was trained, we can take a look at the results. We can access each separate model. Here’s the SVM result:
+```{r}
+model_list_2$svmLinearWeights2
+```
+Notice caret tries some automatic tuning of the available parameters for the model, and chooses the best model using RMSE as performance metric.
+This is the same for each of the other models in our list of models. We won’t go through each one of them. That’s for you to check!
+Let’s go straight to our goal, which is finding the model that has the lowest RMSE. We first asses this for the training data.
+
+
+```{r}
+#glmStepAIC, LogitBoost, bayesglm, rpart, treebag, 
+#gbm, svmLinearWeights2, glmnet, stepLDA, nnet, pcaNNet, rf
+options(digits = 3)
+model_results_2 <- data.frame(
+ GLM = max(model_list_2$glmStepAIC$results$Accuracy),
+ LGB = max(model_list_2$LogitBoost$results$Accuracy),
+ BGLM = max(model_list_2$bayesglm$results$Accuracy),
+ RPAR = max(model_list_2$rpart$results$Accuracy),
+ TBG = max(model_list_2$treebag$results$Accuracy),
+ GBM = max(model_list_2$gbm$results$Accuracy),
+ SVM = max(model_list_2$svmLinearWeights2$results$Accuracy),
+ GLMN = max(model_list_2$glmnet$results$Accuracy),
+ LDA = max(model_list_2$stepLDA$results$Accuracy),
+ NNET = max(model_list_2$nnet$results$Accuracy),
+ PNET = max(model_list_2$pcaNNet$results$Accuracy),
+ RF = max(model_list_2$rf$results$Accuracy)
+ )
+print(model_results_2)
+
+model_final_aic_2 <- data.frame(
+ GLM = (model_list_2$glmStepAIC$finalModel),
+ LGB = (model_list_2$LogitBoost$finalModel),
+ BGLM = (model_list_2$bayesglm$finalModel),
+ RPAR = (model_list_2$rpart$finalModel),
+ TBG = (model_list_2$treebag$finalModel),
+ GBM = (model_list_2$gbm$finalModel),
+ SVM = (model_list_2$svmLinearWeights2$finalModel),
+ GLMN = (model_list_2$glmnet$finalModel),
+ LDA = (model_list_2$stepLDA$finalModel),
+ NNET = (model_list_2$nnet$finalModel),
+ PNET = (model_list_2$pcaNNet$finalModel),
+ RF = (model_list_2$rf$finalModel)
+ )
+print(model_final_aic_2)
+
+```
+
+
+BGLM, GBM, GLMN, PNET, and RF have the most accurate models so we'll focus on comparing those.
+```{r}
+#Bayes GLM
+model_list_2$bayesglm$finalModel
+
+#GBM
+model_list_2$gbm$finalModel
+
+#GLMN, 
+model_list_2$glmnet$finalModel
+
+#PNET
+model_list_2$pcaNNet$finalModel
+
+#RF
+model_list_2$rf$finalModel
+```
+
+plot tp view accuracy and spread
+```{r}
+resamples <- resamples(model_list_2)
+dotplot(resamples, metric ="Accuracy")
+```
+
+Next, we will attempt to create a new model by ensembling our model_list in order to find the best possible model, hopefully a model that takes the best of the 5 we have trained and optimizes performance.
+Ideally, we would ensemble models that are low correlated with each other. In this case we will see that some high correlation is present, but we will choose to move on regardless, just for the sake of showcasing this feature:
+```{r}
+modelCor(resamples)
+```
+
+
+
+Train ensembles
+```{r}
+set.seed(222)
+ensemble_1 <- caretEnsemble(model_list_2, 
+                            metric = "Accuracy", 
+                            trControl = my_control)
+summary(ensemble_1)
+```
+
+Finally, it’s time to evaluate the performance of our models over unseen data, which is in our test set.
+We first predict the test set with each model and then compute RMSE:
+"glmStepAIC", "LogitBoost", "bayesglm", "rpart", "treebag", "gbm", "svmLinearWeights2", "glmnet", "stepLDA", "nnet", "pcaNNet", "rf"
+```{r}
+p <- as.data.frame(predict(model_list_2, newdata=head(testing)))
+print(p)
+model_preds <- lapply(model_list_2, predict, newdata=testing, type="prob")
+model_preds <- lapply(model_preds, function(x) x[,"M"])
+model_preds <- data.frame(model_preds)
+
+
+# PREDICTIONS
+glmStepAIC <- predict.train(model_list_2$glmStepAIC, newdata = testing)
+pred_svm <- predict.train(model_list$svmRadial, newdata = testing)
+pred_rf <- predict.train(model_list$rf, newdata = testing)
+pred_xgbT <- predict.train(model_list$xgbTree, newdata = testing)
+pred_xgbL <- predict.train(model_list$xgbLinear, newdata = testing)
+predict_ens1 <- predict(ensemble_1, newdata = testing)
+predict_ens2 <- predict(ensemble_2, newdata = testing)
+# RMSE
+pred_RMSE <- data.frame(ensemble_1 = RMSE(predict_ens1, y_test),
+                        ensemble_2 = RMSE(predict_ens2, y_test),
+                        LM = RMSE(pred_lm, y_test),
+                        SVM = RMSE(pred_svm, y_test),
+                        RF = RMSE(pred_rf, y_test),
+                        XGBT = RMSE(pred_xgbT, y_test),
+                        XGBL = RMSE(pred_xgbL, y_test))
+print(pred_RMSE)
+
+```
+
+
+
+
